@@ -35,6 +35,27 @@ TOP_K_SEARCH = 10    # Số chunk lấy từ vector store trước rerank (searc
 TOP_K_SELECT = 3     # Số chunk gửi vào prompt sau rerank/select (top-3 sweet spot)
 
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+RERANK_MODEL = os.getenv("RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+
+
+_RERANKER = None
+
+
+def _get_reranker():
+    """
+    Lazy-load CrossEncoder để tránh load model khi không dùng rerank.
+    """
+    global _RERANKER
+    if _RERANKER is None:
+        try:
+            from sentence_transformers import CrossEncoder
+        except ImportError as exc:
+            raise ImportError(
+                "Rerank yêu cầu sentence-transformers. Cài bằng: pip install sentence-transformers"
+            ) from exc
+
+        _RERANKER = CrossEncoder(RERANK_MODEL)
+    return _RERANKER
 
 
 # =============================================================================
@@ -195,8 +216,21 @@ def rerank(
     - Muốn chắc chắn chỉ 3-5 chunk tốt nhất vào prompt
     """
     # TODO Sprint 3: Implement rerank
-    # Tạm thời trả về top_k đầu tiên (không rerank)
-    return candidates[:top_k]
+    if not candidates or top_k <= 0:
+        return []
+
+    model = _get_reranker()
+    pairs = [[query, chunk.get("text", "")] for chunk in candidates]
+    scores = model.predict(pairs)
+
+    reranked = []
+    for chunk, score in zip(candidates, scores):
+        updated = dict(chunk)
+        updated["rerank_score"] = float(score)
+        reranked.append(updated)
+
+    reranked.sort(key=lambda item: item.get("rerank_score", float("-inf")), reverse=True)
+    return reranked[:top_k]
 
 
 # =============================================================================
