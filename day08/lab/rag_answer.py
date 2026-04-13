@@ -508,7 +508,7 @@ if __name__ == "__main__":
     for query in test_queries:
         print(f"\nQuery: {query}")
         try:
-            result = rag_answer(query, retrieval_mode="dense", verbose=True)
+            result = rag_answer(query, retrieval_mode="dense", verbose=True, use_rerank=True)
             print(f"Answer: {result['answer']}")
             print(f"Sources: {result['sources']}")
         except NotImplementedError:

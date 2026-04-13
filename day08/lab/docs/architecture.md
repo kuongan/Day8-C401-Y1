@@ -66,11 +66,10 @@
 ### Variant (Sprint 3)
 | Tham số | Giá trị | Thay đổi so với baseline |
 |---------|---------|------------------------|
-| Strategy | TODO (hybrid / dense) | TODO |
-| Top-k search | TODO | TODO |
-| Top-k select | TODO | TODO |
-| Rerank | TODO (cross-encoder / MMR) | TODO |
-| Query transform | TODO (expansion / HyDE / decomposition) | TODO |
+| Strategy | Rerank | Thêm bước xếp hạng lại sau dense retrieval để ưu tiên chunk liên quan nhất theo ngữ nghĩa câu hỏi |
+| Top-k search | 10 | Giữ nguyên để vẫn đảm bảo recall trước khi lọc lại bằng rerank |
+| Top-k select | 3 | Giữ nguyên đầu ra để so sánh công bằng với baseline, chỉ thay đổi chất lượng top-3 |
+| Rerank | cross-encoder  | Baseline không có rerank; cross-encoder giúp giảm nhiễu và tăng precision của context đưa vào LLM |
 
 **Lý do chọn variant này:**
 > TODO: Giải thích tại sao chọn biến này để tune.
