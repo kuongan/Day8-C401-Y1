@@ -390,38 +390,35 @@ def inspect_metadata_coverage(db_dir: Path = CHROMA_DB_DIR) -> None:
 # =============================================================================
 
 if __name__ == "__main__":
-    # print("=" * 60)
-    # print("Sprint 1: Build RAG Index")
-    # print("=" * 60)
+    print("=" * 60)
+    print("Sprint 1: Build RAG Index")
+    print("=" * 60)
 
-    # # Bước 1: Kiểm tra docs
-    # doc_files = list(DOCS_DIR.glob("*.txt"))
-    # print(f"\nTìm thấy {len(doc_files)} tài liệu:")
-    # for f in doc_files:
-    #     print(f"  - {f.name}")
+    # Bước 1: Kiểm tra docs
+    doc_files = list(DOCS_DIR.glob("*.txt"))
+    print(f"\nTìm thấy {len(doc_files)} tài liệu:")
+    for f in doc_files:
+        print(f"  - {f.name}")
 
-    # # Bước 2: Test preprocess và chunking (không cần API key)
-    # print("\n--- Test preprocess + chunking ---")
-    # for filepath in doc_files[:1]:  # Test với 1 file đầu
-    #     raw = filepath.read_text(encoding="utf-8")
-    #     doc = preprocess_document(raw, str(filepath))
-    #     chunks = chunk_document(doc)
-    #     print(f"\nFile: {filepath.name}")
-    #     print(f"  Metadata: {doc['metadata']}")
-    #     print(f"  Số chunks: {len(chunks)}")
-    #     for i, chunk in enumerate(chunks[:3]):
-    #         print(f"\n  [Chunk {i+1}] Section: {chunk['metadata']['section']}")
-    #         print(f"  Text: {chunk['text'][:150]}...")
+    # Bước 2: Test preprocess và chunking (không cần API key)
+    print("\n--- Test preprocess + chunking ---")
+    for filepath in doc_files[:1]:  # Test với 1 file đầu
+        raw = filepath.read_text(encoding="utf-8")
+        doc = preprocess_document(raw, str(filepath))
+        chunks = chunk_document(doc)
+        print(f"\nFile: {filepath.name}")
+        print(f"  Metadata: {doc['metadata']}")
+        print(f"  Số chunks: {len(chunks)}")
+        for i, chunk in enumerate(chunks[:3]):
+            print(f"\n  [Chunk {i+1}] Section: {chunk['metadata']['section']}")
+            print(f"  Text: {chunk['text'][:150]}...")
 
-    # # Bước 3: Build index (yêu cầu implement get_embedding)
-    # print("\n--- Build Full Index ---")
-    # print("Lưu ý: Cần OPENAI_API_KEY trong .env để chạy embedding!")
-    # build_index()
+    # Bước 3: Build index (yêu cầu implement get_embedding)
+    print("\n--- Build Full Index ---")
+    print("Lưu ý: Cần OPENAI_API_KEY trong .env để chạy embedding!")
+    build_index()
 
-    # # Bước 4: Kiểm tra index
-    # print("\n--- Kiểm tra Index ---")
-    # list_chunks()
-    # inspect_metadata_coverage()
-
-    # print("\nSprint 1 hoàn thành!")
+    # Bước 4: Kiểm tra index
+    print("\n--- Kiểm tra Index ---")
     list_chunks()
+    inspect_metadata_coverage()
