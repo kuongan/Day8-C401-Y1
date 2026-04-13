@@ -44,11 +44,11 @@ BASELINE_CONFIG = {
 # Cấu hình variant (Sprint 3 — điều chỉnh theo lựa chọn của nhóm)
 # TODO Sprint 4: Cập nhật VARIANT_CONFIG theo variant nhóm đã implement
 VARIANT_CONFIG = {
-    "retrieval_mode": "hybrid",   # Hoặc "dense" nếu chỉ đổi rerank
+    "retrieval_mode": "dense",   # Hoặc "dense" nếu chỉ đổi rerank
     "top_k_search": 10,
     "top_k_select": 3,
     "use_rerank": True,           # Hoặc False nếu variant là hybrid không rerank
-    "label": "variant_hybrid_rerank",
+    "label": "variant_rerank",
 }
 
 
@@ -69,7 +69,7 @@ def score_faithfulness(
         return {"score": 1, "notes": "Không có context hoặc answer rỗng"}
 
     # Kiểm tra nhanh: nếu answer là abstain, faithfulness = 5
-    abstain_phrases = ["không tìm thấy", "không có thông tin", "liên hệ bộ phận"]
+    abstain_phrases = ["không tìm thấy", "không có thông tin", "liên hệ bộ phận", "không đủ dữ liệu"]
     if any(p in answer.lower() for p in abstain_phrases):
         return {"score": 5, "notes": "Abstain response — faithfully grounded (no hallucination)"}
 
@@ -381,7 +381,7 @@ def run_scorecard(
         results.append(row)
 
         if verbose:
-            print(f"  Answer: {answer[:100]}...")
+            print(f"  Answer: {answer}...")
             print(f"  Faithful: {faith['score']} | Relevant: {relevance['score']} | "
                   f"Recall: {recall['score']} | Complete: {complete['score']}")
 
