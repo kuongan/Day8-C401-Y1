@@ -1,6 +1,6 @@
 # Báo Cáo Cá Nhân — Lab Day 08: RAG Pipeline
 
-**Họ và tên:** ___________  
+**Họ và tên:** Trần Vọng Triển   
 **Vai trò trong nhóm:** Tech Lead / Retrieval Owner / Eval Owner / Documentation Owner  
 **Ngày nộp:** ___________  
 **Độ dài yêu cầu:** 500–800 từ
