@@ -54,32 +54,37 @@ def retrieve_dense(query: str, top_k: int = TOP_K_SEARCH) -> List[Dict[str, Any]
           - "text": nội dung chunk
           - "metadata": metadata (source, section, effective_date, ...)
           - "score": cosine similarity score
-
-    TODO Sprint 2:
-    1. Embed query bằng cùng model đã dùng khi index (xem index.py)
-    2. Query ChromaDB với embedding đó
-    3. Trả về kết quả kèm score
-
-    Gợi ý:
+    """
+    try:
         import chromadb
         from index import get_embedding, CHROMA_DB_DIR
+    except ImportError as exc:
+        raise ImportError("retrieve_dense yêu cầu chromadb và index.get_embedding().") from exc
 
-        client = chromadb.PersistentClient(path=str(CHROMA_DB_DIR))
-        collection = client.get_collection("rag_lab")
+    client = chromadb.PersistentClient(path=str(CHROMA_DB_DIR))
+    collection = client.get_collection("rag_lab")
 
-        query_embedding = get_embedding(query)
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=top_k,
-            include=["documents", "metadatas", "distances"]
-        )
-        # Lưu ý: distances trong ChromaDB cosine = 1 - similarity
-        # Score = 1 - distance
-    """
-    raise NotImplementedError(
-        "TODO Sprint 2: Implement retrieve_dense().\n"
-        "Tham khảo comment trong hàm để biết cách query ChromaDB."
+    query_embedding = get_embedding(query)
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+        include=["documents", "metadatas", "distances"],
     )
+
+    documents = results.get("documents", [[]])[0] if results.get("documents") else []
+    metadatas = results.get("metadatas", [[]])[0] if results.get("metadatas") else []
+    distances = results.get("distances", [[]])[0] if results.get("distances") else []
+
+    chunks = []
+    for doc, meta, dist in zip(documents, metadatas, distances):
+        score = 1.0 - dist if dist is not None else 0.0
+        chunks.append({
+            "text": doc,
+            "metadata": meta,
+            "score": score,
+        })
+
+    return sorted(chunks, key=lambda item: item["score"], reverse=True)
 
 
 # =============================================================================
@@ -267,16 +272,11 @@ def build_grounded_prompt(query: str, context_block: str) -> str:
     2. Abstain: Thiếu context thì nói không đủ dữ liệu
     3. Citation: Gắn source/section khi có thể
     4. Short, clear, stable: Output ngắn, rõ, nhất quán
-
-    TODO Sprint 2:
-    Đây là prompt baseline. Trong Sprint 3, bạn có thể:
-    - Thêm hướng dẫn về format output (JSON, bullet points)
-    - Thêm ngôn ngữ phản hồi (tiếng Việt vs tiếng Anh)
-    - Điều chỉnh tone phù hợp với use case (CS helpdesk, IT support)
     """
     prompt = f"""Answer only from the retrieved context below.
-If the context is insufficient to answer the question, say you do not know and do not make up information.
-Cite the source field (in brackets like [1]) when possible.
+If the context is insufficient to answer the question, respond exactly with: "Không đủ dữ liệu".
+Do not invent facts or use any information outside the provided context.
+Cite the source field using the bracket notation [1], [2], etc. when you refer to information from the context.
 Keep your answer short, clear, and factual.
 Respond in the same language as the question.
 
@@ -291,35 +291,37 @@ Answer:"""
 
 def call_llm(prompt: str) -> str:
     """
-    Gọi LLM để sinh câu trả lời.
-
-    TODO Sprint 2:
-    Chọn một trong hai:
-
-    Option A — OpenAI (cần OPENAI_API_KEY):
-        from openai import OpenAI
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = client.chat.completions.create(
-            model=LLM_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,     # temperature=0 để output ổn định, dễ đánh giá
-            max_tokens=512,
-        )
-        return response.choices[0].message.content
-
-    Option B — Google Gemini (cần GOOGLE_API_KEY):
-        import google.generativeai as genai
-        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(prompt)
-        return response.text
-
-    Lưu ý: Dùng temperature=0 hoặc thấp để output ổn định cho evaluation.
+    Gọi LLM để sinh câu trả lời bằng OpenAI.
     """
-    raise NotImplementedError(
-        "TODO Sprint 2: Implement call_llm().\n"
-        "Chọn Option A (OpenAI) hoặc Option B (Gemini) trong TODO comment."
+    from openai import OpenAI
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY chưa được cấu hình. Vui lòng thêm vào .env hoặc biến môi trường.")
+
+    client = OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
+        model=LLM_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,
+        max_tokens=512,
     )
+
+    choice = response.choices[0]
+    message = getattr(choice, "message", None)
+    content = None
+    if isinstance(message, dict):
+        content = message.get("content")
+    else:
+        content = getattr(message, "content", None)
+
+    if not content:
+        content = getattr(choice, "text", None) or choice.get("text") if hasattr(choice, "get") else None
+
+    if not content:
+        raise RuntimeError("Không thể lấy nội dung trả lời từ OpenAI response.")
+
+    return str(content).strip()
 
 
 def rag_answer(
