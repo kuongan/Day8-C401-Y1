@@ -72,8 +72,15 @@
 | Rerank | cross-encoder  | Baseline không có rerank; cross-encoder giúp giảm nhiễu và tăng precision của context đưa vào LLM |
 
 **Lý do chọn variant này:**
-> TODO: Giải thích tại sao chọn biến này để tune.
-> Ví dụ: "Chọn hybrid vì corpus có cả câu tự nhiên (policy) lẫn mã lỗi và tên chuyên ngành (SLA ticket P1, ERR-403)."
+> Baseline faithfulness cao (4.80) nhưng completeness thấp (3.40) → cần improve depth mà không sacrifice grounding.
+> Q01, Q06, Q08 missing completeness vì context top-3 insufficient → rerank giúp đưa chunk chân chính nhất lên top.
+> Dense recall đã 5.0, chỉ cần improve precision.
+>
+> **Kết quả thực tế Variant 1 (Rerank):**
+> - Faithfulness: 4.80 → 4.60 (-0.20) — Hallucination tăng ở q03 (rerank lấy sai chunk)
+> - Completeness: 3.40 → 3.60 (+0.20) — Cải q01, q06 nhưng trade-off với faithfulness
+> - **Kết luận:** Variant 1 KHÔNG giúp. Cross-encoder generic không phù hợp policy domain.
+> - **Recommendation:** Dùng baseline dense hoặc thử query expansion (Variant 2).
 
 ---
 
@@ -100,7 +107,7 @@ Answer:
 ### LLM Configuration
 | Tham số | Giá trị |
 |---------|---------|
-| Model | TODO (gpt-4o-mini / gemini-1.5-flash) |
+| Model | gpt-4o-mini |
 | Temperature | 0 (để output ổn định cho eval) |
 | Max tokens | 512 |
 

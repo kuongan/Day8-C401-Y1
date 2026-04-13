@@ -7,70 +7,76 @@
 
 ## Baseline (Sprint 2)
 
-**Ngày:** ___________  
+**Ngày:** 2026-04-13  
 **Config:**
 ```
 retrieval_mode = "dense"
-chunk_size = _____ tokens
-overlap = _____ tokens
+chunk_size = 400 tokens
+overlap = 80 tokens
 top_k_search = 10
 top_k_select = 3
 use_rerank = False
-llm_model = _____
+llm_model = gpt-4o-mini
 ```
 
 **Scorecard Baseline:**
 | Metric | Average Score |
 |--------|--------------|
-| Faithfulness | ? /5 |
-| Answer Relevance | ? /5 |
-| Context Recall | ? /5 |
-| Completeness | ? /5 |
+| Faithfulness | 4.80 /5 |
+| Answer Relevance | 3.80 /5 |
+| Context Recall | 5.00 /5 |
+| Completeness | 3.40 /5 |
 
 **Câu hỏi yếu nhất (điểm thấp):**
-> TODO: Liệt kê 2-3 câu hỏi có điểm thấp nhất và lý do tại sao.
-> Ví dụ: "q07 (Approval Matrix) - context recall = 1/5 vì dense bỏ lỡ alias."
+> **q07 (Approval Matrix)** - Relevance=1/5, Completeness=1/5. Dense bỏ lỡ "Approval Matrix" vì document đã đổi tên thành "Access Control SOP". Correctly abstain nhưng không retrieval được expected source.
+>
+> **q09 (ERR-403-AUTH)** - Relevance=1/5, Completeness=2/5. Error code không trong corpus, model correctly nói "Không đủ dữ liệu". Faithfulness=5/5 (không hallucinate) nhưng relevance thấp vì query yêu dữ liệu không có.
+>
+> **q10 (VIP Refund)** - Relevance=1/5, Completeness=1/5. Query hỏi quy trình hoàn tiền VIP không có trong docs, correctly abstained. Cần content richer hoặc query expansion.
 
 **Giả thuyết nguyên nhân (Error Tree):**
-- [ ] Indexing: Chunking cắt giữa điều khoản
-- [ ] Indexing: Metadata thiếu effective_date
-- [ ] Retrieval: Dense bỏ lỡ exact keyword / alias
-- [ ] Retrieval: Top-k quá ít → thiếu evidence
-- [ ] Generation: Prompt không đủ grounding
-- [ ] Generation: Context quá dài → lost in the middle
+- [x] Indexing: Metadata đầy đủ, không missing effective_date
+- [x] Retrieval: Dense ok (Context Recall=5.0), retrieval logic solid
+- [x] Generation: Grounding ok, model không hallucinate (Faithfulness=4.8)
+- [x] Alias bỏ lỡ: q07 - Dense không biết "Approval Matrix" = "Access Control SOP"
+- [ ] Query expansion: q07, q10 cần expanded query hoặc multi-hop reasoning
+- [x] Context length ok: Recall=5.0 cho tất cả retrieval được source
 
 ---
 
 ## Variant 1 (Sprint 3)
 
-**Ngày:** ___________  
-**Biến thay đổi:** ___________  
+**Ngày:** 2026-04-13  
+**Biến thay đổi:** Thêm cross-encoder rerank sau dense retrieval
 **Lý do chọn biến này:**
-> TODO: Giải thích theo evidence từ baseline results.
-> Ví dụ: "Chọn hybrid vì q07 (alias query) và q09 (mã lỗi ERR-403) đều thất bại với dense.
-> Corpus có cả ngôn ngữ tự nhiên (policy) lẫn tên riêng/mã lỗi (ticket code, SLA label)."
+> Baseline faithfulness cao (4.80) nhưng completeness thấp (3.40) → cần improve depth mà không sacrifice grounding.
+> Thấy q01, q06, q08 missing completeness (chỉ 4/5) vì context top-3 không enough nuanced → rerank giúp đưa chunk chân chính nhất lên top-3.
+> Dense ok về recall (5.0), nhưng precision (relevance=3.8) có thể cải bằng cross-encoder rescoring.
 
 **Config thay đổi:**
 ```
-retrieval_mode = "hybrid"   # hoặc biến khác
-# Các tham số còn lại giữ nguyên như baseline
+retrieval_mode = "dense"    # Giữ nguyên
+use_rerank = True           # Thay đổi: cross-encoder reranking
+top_k_search = 10           # Giữ nguyên
+top_k_select = 3            # Giữ nguyên
 ```
 
 **Scorecard Variant 1:**
 | Metric | Baseline | Variant 1 | Delta |
 |--------|----------|-----------|-------|
-| Faithfulness | ?/5 | ?/5 | +/- |
-| Answer Relevance | ?/5 | ?/5 | +/- |
-| Context Recall | ?/5 | ?/5 | +/- |
-| Completeness | ?/5 | ?/5 | +/- |
+| Faithfulness | 4.80/5 | 4.60/5 | -0.20 |
+| Answer Relevance | 3.80/5 | 3.80/5 | 0 |
+| Context Recall | 5.00/5 | 5.00/5 | 0 |
+| Completeness | 3.40/5 | 3.60/5 | +0.20 |
 
 **Nhận xét:**
-> TODO: Variant 1 cải thiện ở câu nào? Tại sao?
-> Có câu nào kém hơn không? Tại sao?
+> **Cải thiện:** q01, q06 completeness tăng 4→5 vì rerank đưa chunk có first response time (15 min) lên top.
+> **Hạ xuống:** q03 faithfulness xuống 4→2 vì rerank chọn sai chunk - lấy Level 2 requirement mà áp cho Level 3, hallucinate "IT Security for L3".
+> Trade-off: +0.20 completeness nhưng -0.20 faithfulness → không giá trị.
 
 **Kết luận:**
-> TODO: Variant 1 có tốt hơn baseline không?
-> Bằng chứng là gì? (điểm số, câu hỏi cụ thể)
+> **Variant 1 KHÔNG tốt hơn baseline.** Hallucination tăng ở q03, faithfulness giảm. Cross-encoder generic không phù hợp corporate policy domain.
+> **Recommendation:** Dùng baseline dense, hoặc thử query expansion để fix alias issues.
 
 ---
 
@@ -90,17 +96,23 @@ retrieval_mode = "hybrid"   # hoặc biến khác
 | Context Recall | ? | ? | ? | ? |
 | Completeness | ? | ? | ? | ? |
 
+
 ---
 
 ## Tóm tắt học được
 
-> TODO (Sprint 4): Điền sau khi hoàn thành evaluation.
-
 1. **Lỗi phổ biến nhất trong pipeline này là gì?**
-   > _____________
+   > **Alias / Paraphrase mismatch** (q07 Approval Matrix): Dense embeddings không biết tên cũ = tên mới. Model correctly abstain (Faithfulness=5) nhưng Relevance=1 vì query không match semantic.
+   > **Query outside corpus** (q09, q10): ERR-403, VIP refund không trong docs → correctly abstain nhưng Relevance=1 (no choice).
+   > **Completeness gap** (3.4/5): Context top-3 không enough detail, cần multi-hop hoặc expansion.
 
 2. **Biến nào có tác động lớn nhất tới chất lượng?**
-   > _____________
+   > **Rerank (cross-encoder):** Âm tác động (-0.20 faithfulness ở Variant1). Generic model không phù hợp policy domain → hallucinate q03.
+   > **Dense embedding quality:** Cực tốt (Recall=5.0), không cần đổi model.
+   > **Query expansion:** Dự kiến +0.5-1.0 relevance (chưa test, nhưng lý thuyết giải q07, q10).
 
 3. **Nếu có thêm 1 giờ, nhóm sẽ thử gì tiếp theo?**
-   > _____________
+   > **(1) Variant 2 Query Expansion**: Expand "Approval Matrix" → "Access Control SOP" aliases. Test q07 score.
+   > **(2) Fine-tune reranker**: Use q01-q10 eval results to fine-tune cross-encoder on policy domain → recover q03.
+   > **(3) Fallback template**: Khi abstain, offer suggestions (alias, related docs) instead of raw "Không đủ dữ liệu".
+   > **Priority:** (1) > (3) > (2) for impact to user experience.
