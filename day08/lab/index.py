@@ -51,7 +51,7 @@ def preprocess_document(raw_text: str, filepath: str) -> Dict[str, Any]:
     Returns:
         Dict chứa:
           - "text": nội dung đã clean
-          - "metadata": dict với source, department, effective_date, access
+          - "metadata": dict với source, department, effective_date, access, section
 
     TODO Sprint 1:
     - Extract metadata từ dòng đầu file (Source, Department, Effective Date, Access)
@@ -63,7 +63,7 @@ def preprocess_document(raw_text: str, filepath: str) -> Dict[str, Any]:
     lines = raw_text.strip().split("\n")
     metadata = {
         "source": filepath,
-        "section": "",
+        "section": [],
         "department": "unknown",
         "effective_date": "unknown",
         "access": "internal",
@@ -73,8 +73,7 @@ def preprocess_document(raw_text: str, filepath: str) -> Dict[str, Any]:
 
     for line in lines:
         if not header_done:
-            # TODO: Parse metadata từ các dòng "Key: Value"
-            # Ví dụ: "Source: policy/refund-v4.pdf" → metadata["source"] = "policy/refund-v4.pdf"
+            # Parse metadata từ các dòng "Key: Value"
             if line.startswith("Source:"):
                 metadata["source"] = line.replace("Source:", "").strip()
             elif line.startswith("Department:"):
@@ -95,9 +94,16 @@ def preprocess_document(raw_text: str, filepath: str) -> Dict[str, Any]:
 
     cleaned_text = "\n".join(content_lines)
 
-    # TODO: Thêm bước normalize text nếu cần
-    # Gợi ý: bỏ ký tự đặc biệt thừa, chuẩn hóa dấu câu
+    # Extract sections từ toàn bộ text
+    sections = re.findall(r"=== (.*?) ===", raw_text)
+    metadata["section"] = sections
+
+    # Normalize text: bỏ ký tự đặc biệt thừa, chuẩn hóa dấu câu, khoảng trắng
     cleaned_text = re.sub(r"\n{3,}", "\n\n", cleaned_text)  # max 2 dòng trống liên tiếp
+    cleaned_text = re.sub(r"[ \t]+", " ", cleaned_text)  # chuẩn hóa khoảng trắng và tab thành single space
+    cleaned_text = re.sub(r"([.!?])\s*", r"\1 ", cleaned_text)  # đảm bảo dấu câu có space sau
+    cleaned_text = re.sub(r"[\"""]", '"', cleaned_text)  # chuẩn hóa quotes
+    cleaned_text = cleaned_text.strip()  # loại bỏ leading/trailing whitespace
 
     return {
         "text": cleaned_text,
@@ -180,9 +186,7 @@ def _split_by_size(
     """
     Helper: Split text dài thành chunks với overlap.
 
-    TODO Sprint 1:
-    Hiện tại dùng split đơn giản theo ký tự.
-    Cải thiện: split theo paragraph (\n\n) trước, rồi mới ghép đến khi đủ size.
+    Split theo paragraph (\n\n) trước, rồi ghép đến khi đủ size.
     """
     if len(text) <= chunk_chars:
         # Toàn bộ section vừa một chunk
@@ -191,26 +195,32 @@ def _split_by_size(
             "metadata": {**base_metadata, "section": section},
         }]
 
-    # TODO: Implement split theo paragraph với overlap
-    # Gợi ý:
-    # paragraphs = text.split("\n\n")
-    # Ghép paragraphs lại cho đến khi gần đủ chunk_chars
-    # Lấy overlap từ đoạn cuối chunk trước
+    # Split theo paragraph
+    paragraphs = text.split("\n\n")
     chunks = []
-    start = 0
-    while start < len(text):
-        end = min(start + chunk_chars, len(text))
-        chunk_text = text[start:end]
+    current_chunk = ""
+    overlap_text = ""
 
-        # TODO: Tìm ranh giới tự nhiên gần nhất (dấu xuống dòng, dấu chấm)
-        # thay vì cắt giữa câu
+    for para in paragraphs:
+        # Nếu thêm paragraph này vào current_chunk vượt quá chunk_chars
+        if len(current_chunk) + len(para) + 2 > chunk_chars and current_chunk:
+            # Lưu chunk hiện tại
+            chunks.append({
+                "text": current_chunk.strip(),
+                "metadata": {**base_metadata, "section": section},
+            })
+            # Bắt đầu chunk mới với overlap từ cuối chunk trước
+            overlap_text = current_chunk[-overlap_chars:] if len(current_chunk) > overlap_chars else current_chunk
+            current_chunk = overlap_text + "\n\n" + para
+        else:
+            current_chunk += ("\n\n" if current_chunk else "") + para
 
+    # Lưu chunk cuối cùng
+    if current_chunk.strip():
         chunks.append({
-            "text": chunk_text,
+            "text": current_chunk.strip(),
             "metadata": {**base_metadata, "section": section},
         })
-        # Overlap: lùi lại overlap_chars để chunk sau có ngữ cảnh từ chunk trước
-        start = end - overlap_chars
 
     return chunks
 
@@ -224,27 +234,15 @@ def get_embedding(text: str) -> List[float]:
     """
     Tạo embedding vector cho một đoạn text.
 
-    TODO Sprint 1:
-    Chọn một trong hai:
-
-    Option A — OpenAI Embeddings (cần OPENAI_API_KEY):
-        from openai import OpenAI
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = client.embeddings.create(
-            input=text,
-            model="text-embedding-3-small"
-        )
-        return response.data[0].embedding
-
-    Option B — Sentence Transformers (chạy local, không cần API key):
-        from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
-        return model.encode(text).tolist()
+    Sử dụng OpenAI Embeddings (Option A) - cần OPENAI_API_KEY.
     """
-    raise NotImplementedError(
-        "TODO: Implement get_embedding().\n"
-        "Chọn Option A (OpenAI) hoặc Option B (Sentence Transformers) trong TODO comment."
+    from openai import OpenAI
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    response = client.embeddings.create(
+        input=text,
+        model="text-embedding-3-small"
     )
+    return response.data[0].embedding
 
 
 def build_index(docs_dir: Path = DOCS_DIR, db_dir: Path = CHROMA_DB_DIR) -> None:
@@ -274,9 +272,12 @@ def build_index(docs_dir: Path = DOCS_DIR, db_dir: Path = CHROMA_DB_DIR) -> None
     print(f"Đang build index từ: {docs_dir}")
     db_dir.mkdir(parents=True, exist_ok=True)
 
-    # TODO: Khởi tạo ChromaDB
-    # client = chromadb.PersistentClient(path=str(db_dir))
-    # collection = client.get_or_create_collection(...)
+    # Khởi tạo ChromaDB
+    client = chromadb.PersistentClient(path=str(db_dir))
+    collection = client.get_or_create_collection(
+        name="rag_lab",
+        metadata={"hnsw:space": "cosine"}
+    )
 
     total_chunks = 0
     doc_files = list(docs_dir.glob("*.txt"))
@@ -289,32 +290,26 @@ def build_index(docs_dir: Path = DOCS_DIR, db_dir: Path = CHROMA_DB_DIR) -> None
         print(f"  Processing: {filepath.name}")
         raw_text = filepath.read_text(encoding="utf-8")
 
-        # TODO: Gọi preprocess_document
-        # doc = preprocess_document(raw_text, str(filepath))
-
-        # TODO: Gọi chunk_document
-        # chunks = chunk_document(doc)
-
-        # TODO: Embed và lưu từng chunk vào ChromaDB
-        # for i, chunk in enumerate(chunks):
-        #     chunk_id = f"{filepath.stem}_{i}"
-        #     embedding = get_embedding(chunk["text"])
-        #     collection.upsert(
-        #         ids=[chunk_id],
-        #         embeddings=[embedding],
-        #         documents=[chunk["text"]],
-        #         metadatas=[chunk["metadata"]],
-        #     )
-        # total_chunks += len(chunks)
-
-        # Placeholder để code không lỗi khi chưa implement
+        # Gọi preprocess_document
         doc = preprocess_document(raw_text, str(filepath))
+
+        # Gọi chunk_document
         chunks = chunk_document(doc)
-        print(f"    → {len(chunks)} chunks (embedding chưa implement)")
+
+        # Embed và lưu từng chunk vào ChromaDB
+        for i, chunk in enumerate(chunks):
+            chunk_id = f"{filepath.stem}_{i}"
+            embedding = get_embedding(chunk["text"])
+            collection.upsert(
+                ids=[chunk_id],
+                embeddings=[embedding],
+                documents=[chunk["text"]],
+                metadatas=[chunk["metadata"]],
+            )
         total_chunks += len(chunks)
+        print(f"    → {len(chunks)} chunks")
 
     print(f"\nHoàn thành! Tổng số chunks: {total_chunks}")
-    print("Lưu ý: Embedding chưa được implement. Xem TODO trong get_embedding() và build_index().")
 
 
 # =============================================================================
@@ -395,43 +390,38 @@ def inspect_metadata_coverage(db_dir: Path = CHROMA_DB_DIR) -> None:
 # =============================================================================
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("Sprint 1: Build RAG Index")
-    print("=" * 60)
+    # print("=" * 60)
+    # print("Sprint 1: Build RAG Index")
+    # print("=" * 60)
 
-    # Bước 1: Kiểm tra docs
-    doc_files = list(DOCS_DIR.glob("*.txt"))
-    print(f"\nTìm thấy {len(doc_files)} tài liệu:")
-    for f in doc_files:
-        print(f"  - {f.name}")
+    # # Bước 1: Kiểm tra docs
+    # doc_files = list(DOCS_DIR.glob("*.txt"))
+    # print(f"\nTìm thấy {len(doc_files)} tài liệu:")
+    # for f in doc_files:
+    #     print(f"  - {f.name}")
 
-    # Bước 2: Test preprocess và chunking (không cần API key)
-    print("\n--- Test preprocess + chunking ---")
-    for filepath in doc_files[:1]:  # Test với 1 file đầu
-        raw = filepath.read_text(encoding="utf-8")
-        doc = preprocess_document(raw, str(filepath))
-        chunks = chunk_document(doc)
-        print(f"\nFile: {filepath.name}")
-        print(f"  Metadata: {doc['metadata']}")
-        print(f"  Số chunks: {len(chunks)}")
-        for i, chunk in enumerate(chunks[:3]):
-            print(f"\n  [Chunk {i+1}] Section: {chunk['metadata']['section']}")
-            print(f"  Text: {chunk['text'][:150]}...")
+    # # Bước 2: Test preprocess và chunking (không cần API key)
+    # print("\n--- Test preprocess + chunking ---")
+    # for filepath in doc_files[:1]:  # Test với 1 file đầu
+    #     raw = filepath.read_text(encoding="utf-8")
+    #     doc = preprocess_document(raw, str(filepath))
+    #     chunks = chunk_document(doc)
+    #     print(f"\nFile: {filepath.name}")
+    #     print(f"  Metadata: {doc['metadata']}")
+    #     print(f"  Số chunks: {len(chunks)}")
+    #     for i, chunk in enumerate(chunks[:3]):
+    #         print(f"\n  [Chunk {i+1}] Section: {chunk['metadata']['section']}")
+    #         print(f"  Text: {chunk['text'][:150]}...")
 
-    # Bước 3: Build index (yêu cầu implement get_embedding)
-    print("\n--- Build Full Index ---")
-    print("Lưu ý: Cần implement get_embedding() trước khi chạy bước này!")
-    # Uncomment dòng dưới sau khi implement get_embedding():
+    # # Bước 3: Build index (yêu cầu implement get_embedding)
+    # print("\n--- Build Full Index ---")
+    # print("Lưu ý: Cần OPENAI_API_KEY trong .env để chạy embedding!")
     # build_index()
 
-    # Bước 4: Kiểm tra index
-    # Uncomment sau khi build_index() thành công:
+    # # Bước 4: Kiểm tra index
+    # print("\n--- Kiểm tra Index ---")
     # list_chunks()
     # inspect_metadata_coverage()
 
-    print("\nSprint 1 setup hoàn thành!")
-    print("Việc cần làm:")
-    print("  1. Implement get_embedding() - chọn OpenAI hoặc Sentence Transformers")
-    print("  2. Implement phần TODO trong build_index()")
-    print("  3. Chạy build_index() và kiểm tra với list_chunks()")
-    print("  4. Nếu chunking chưa tốt: cải thiện _split_by_size() để split theo paragraph")
+    # print("\nSprint 1 hoàn thành!")
+    list_chunks()
