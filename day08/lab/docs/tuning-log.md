@@ -30,7 +30,7 @@ llm_model = gpt-4o-mini
 **Câu hỏi yếu nhất (điểm thấp):**
 > **q07 (Approval Matrix)** - Relevance=1/5, Completeness=1/5. Dense bỏ lỡ "Approval Matrix" vì document đã đổi tên thành "Access Control SOP". Correctly abstain nhưng không retrieval được expected source.
 >
-> **q09 (ERR-403-AUTH)** - Relevance=1/5, Completeness=2/5. Error code không trong corpus, model correctly nói "Không đủ dữ liệu". Faithfulness=5/5 (không hallucinate) nhưng relevance thấp vì query yêu dữ liệu không có.
+> **q09 (ERR-403-AUTH)** - Relevance=1/5, Completeness=2/5. Error code không trong corpus, model correctly nói "Không đủ dữ liệu". Faithfulness=5/5 (không hallucinate) nhưng relevance thấp vì query yêu cầu dữ liệu không có.
 >
 > **q10 (VIP Refund)** - Relevance=1/5, Completeness=1/5. Query hỏi quy trình hoàn tiền VIP không có trong docs, correctly abstained. Cần content richer hoặc query expansion.
 
@@ -51,7 +51,7 @@ llm_model = gpt-4o-mini
 **Lý do chọn biến này:**
 > Baseline faithfulness cao (4.80) nhưng completeness thấp (3.40) → cần improve depth mà không sacrifice grounding.
 > Thấy q01, q06, q08 missing completeness (chỉ 4/5) vì context top-3 không enough nuanced → rerank giúp đưa chunk chân chính nhất lên top-3.
-> Dense ok về recall (5.0), nhưng precision (relevance=3.8) có thể cải bằng cross-encoder rescoring.
+> Dense ok về recall (5.0), nhưng precision (relevance=3.8) có thể cải thiện bằng cross-encoder rescoring.
 
 **Config thay đổi:**
 ```
@@ -112,7 +112,11 @@ top_k_select = 3            # Giữ nguyên
    > **Query expansion:** Dự kiến +0.5-1.0 relevance (chưa test, nhưng lý thuyết giải q07, q10).
 
 3. **Nếu có thêm 1 giờ, nhóm sẽ thử gì tiếp theo?**
-   > **(1) Variant 2 Query Expansion**: Expand "Approval Matrix" → "Access Control SOP" aliases. Test q07 score.
-   > **(2) Fine-tune reranker**: Use q01-q10 eval results to fine-tune cross-encoder on policy domain → recover q03.
-   > **(3) Fallback template**: Khi abstain, offer suggestions (alias, related docs) instead of raw "Không đủ dữ liệu".
-   > **Priority:** (1) > (3) > (2) for impact to user experience.
+   > (1) Variant 2 - Query Expansion: Thực hiện mở rộng từ khóa "Approval Matrix" thành "Access Control SOP" và các biến thể khác để cải thiện điểm số cho câu q07.
+
+ > (2) Fine-tune reranker: Sử dụng kết quả đánh giá từ q01-q10 để tinh chỉnh mô hình cross-encoder chuyên biệt cho mảng chính sách nội bộ nhằm khắc phục lỗi ở câu q03.
+
+ > (3) Fallback template: Thay vì chỉ báo "Không đủ dữ liệu", hệ thống sẽ gợi ý thêm các từ khóa liên quan hoặc các đầu mục tài liệu gần nhất để tăng trải nghiệm người dùng.
+
+ > Thứ tự ưu tiên: (1) > (3) > (2) để tối ưu hóa trải nghiệm người dùng (user experience) nhanh nhất.
+
