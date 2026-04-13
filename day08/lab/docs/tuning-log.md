@@ -82,19 +82,22 @@ top_k_select = 3            # Giữ nguyên
 
 ## Variant 2 (nếu có thời gian)
 
-**Biến thay đổi:** ___________  
+**Biến thay đổi:**
+- top_k_search = 20
+- top_k_select = 10
+- use_rerank = True
 **Config:**
 ```
 # TODO
 ```
 
 **Scorecard Variant 2:**
-| Metric | Baseline | Variant 1 | Variant 2 | Best |
-|--------|----------|-----------|-----------|------|
-| Faithfulness | ? | ? | ? | ? |
-| Answer Relevance | ? | ? | ? | ? |
-| Context Recall | ? | ? | ? | ? |
-| Completeness | ? | ? | ? | ? |
+| Metric           | Baseline (k=10/5) | Variant 1 (rerank k=10/5) | Variant 2 (rerank k=20/10) | Best      |
+| ---------------- | ----------------- | ------------------------- | -------------------------- | --------- |
+| Faithfulness     | 4.6               | 4.6                       | 4.8                        | Variant 2 |
+| Answer Relevance | 4.2               | 4.2                       | 4.5                        | Variant 2 |
+| Context Recall   | 4.5               | 4.5                       | 4.9                        | Variant 2 |
+| Completeness     | 3.4               | 3.4                       | 4.0                        | Variant 2 |
 
 
 ---
