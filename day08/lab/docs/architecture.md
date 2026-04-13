@@ -18,7 +18,7 @@
 ```
 
 **Mô tả ngắn gọn:**
-> TODO: Mô tả hệ thống trong 2-3 câu. Nhóm xây gì? Cho ai dùng? Giải quyết vấn đề gì?
+> Nhóm xây dựng một RAG pipeline cho trợ lý nội bộ khối CS + IT Helpdesk để trả lời câu hỏi vận hành bằng bằng chứng từ tài liệu chính sách. Hệ thống xử lý theo chuỗi preprocess -> chunk -> embed -> lưu vector vào ChromaDB, sau đó retrieval và generation có citation nguồn. Ở Sprint 1, pipeline đã index thành công 5 tài liệu với tổng 29 chunks và metadata đầy đủ để phục vụ retrieval, freshness và kiểm chứng nguồn.
 
 ---
 
@@ -27,24 +27,29 @@
 ### Tài liệu được index
 | File | Nguồn | Department | Số chunk |
 |------|-------|-----------|---------|
-| `policy_refund_v4.txt` | policy/refund-v4.pdf | CS | TODO |
-| `sla_p1_2026.txt` | support/sla-p1-2026.pdf | IT | TODO |
-| `access_control_sop.txt` | it/access-control-sop.md | IT Security | TODO |
-| `it_helpdesk_faq.txt` | support/helpdesk-faq.md | IT | TODO |
-| `hr_leave_policy.txt` | hr/leave-policy-2026.pdf | HR | TODO |
+| `policy_refund_v4.txt` | policy/refund-v4.pdf | CS | 6 |
+| `sla_p1_2026.txt` | support/sla-p1-2026.pdf | IT | 5 |
+| `access_control_sop.txt` | it/access-control-sop.md | IT Security | 7 |
+| `it_helpdesk_faq.txt` | support/helpdesk-faq.md | IT | 6 |
+| `hr_leave_policy.txt` | hr/leave-policy-2026.pdf | HR | 5 |
 
 ### Quyết định chunking
 | Tham số | Giá trị | Lý do |
 |---------|---------|-------|
-| Chunk size | TODO tokens | TODO |
-| Overlap | TODO tokens | TODO |
-| Chunking strategy | Heading-based / paragraph-based | TODO |
+| Chunk size | 400 tokens (xấp xỉ) | Cân bằng giữa giữ đủ ngữ cảnh điều khoản và không làm chunk quá dài cho retrieval |
+| Overlap | 80 tokens (xấp xỉ) | Giảm mất mát thông tin ở biên chunk, đặc biệt với câu dài hoặc bullet list |
+| Chunking strategy | Heading-based trước, sau đó paragraph-based khi section dài | Ưu tiên ranh giới tự nhiên theo section (=== ... ===), chỉ tách nhỏ tiếp khi vượt ngưỡng kích thước |
 | Metadata fields | source, section, effective_date, department, access | Phục vụ filter, freshness, citation |
 
 ### Embedding model
-- **Model**: TODO (OpenAI text-embedding-3-small / paraphrase-multilingual-MiniLM-L12-v2)
+- **Model**: OpenAI `text-embedding-3-small`
 - **Vector store**: ChromaDB (PersistentClient)
 - **Similarity metric**: Cosine
+
+**Kết quả kiểm tra Sprint 1 (runtime):**
+- Build index thành công cho 5 tài liệu, tổng 29 chunks.
+- Phân bố theo department: IT Security (7), HR (5), IT (11), CS (6).
+- Chunks thiếu `effective_date`: 0.
 
 ---
 
