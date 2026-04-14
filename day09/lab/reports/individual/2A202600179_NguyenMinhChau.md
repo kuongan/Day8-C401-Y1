@@ -17,6 +17,10 @@ Cụ thể, tôi phụ trách toàn bộ pipeline trong file này: thiết kế 
 - File chính: `workers/retrieval.py`
 - Công việc chính: implement dense retrieval, embedding strategy, ChromaDB integration, state output chuẩn hóa
 
+**Bằng chứng (commit hash, file có comment tên bạn, v.v.):**
+
+Commit chính của tôi: `5bbbda03968ce18184540a1d047ce4adb02f6e16` (author/nhãn: chauminhnguyen)
+
 ---
 
 ## 2. Tôi đã ra một quyết định kỹ thuật gì?
