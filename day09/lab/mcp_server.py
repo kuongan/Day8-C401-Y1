@@ -29,9 +29,8 @@ Chạy thử:
 """
 
 import os
-import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict
 
 
 # ─────────────────────────────────────────────
@@ -144,6 +143,7 @@ def tool_search_kb(query: str, top_k: int = 3) -> dict:
         import sys
         sys.path.insert(0, os.path.dirname(__file__))
         from workers.retrieval import retrieve_dense
+        top_k = max(1, int(top_k))
         chunks = retrieve_dense(query, top_k=top_k)
         sources = list({c["source"] for c in chunks})
         return {
@@ -327,6 +327,26 @@ def dispatch_tool(tool_name: str, tool_input: dict) -> dict:
         }
 
 
+def call_tool(tool_name: str, tool_input: dict) -> dict:
+    """
+    Standardized MCP call envelope for tracing.
+
+    Format:
+    {
+      "tool": "search_kb",
+      "input": {...},
+      "output": {...},
+      "timestamp": "2026-04-13T14:32:11"
+    }
+    """
+    return {
+        "tool": tool_name,
+        "input": tool_input,
+        "output": dispatch_tool(tool_name, tool_input),
+        "timestamp": datetime.now().replace(microsecond=0).isoformat(),
+    }
+
+
 # ─────────────────────────────────────────────
 # Test & Demo
 # ─────────────────────────────────────────────
@@ -343,7 +363,8 @@ if __name__ == "__main__":
 
     # 2. Test search_kb
     print("\n🔍 Test: search_kb")
-    result = dispatch_tool("search_kb", {"query": "SLA P1 resolution time", "top_k": 2})
+    result_call = call_tool("search_kb", {"query": "SLA P1 resolution time", "top_k": 2})
+    result = result_call["output"]
     if result.get("chunks"):
         for c in result["chunks"]:
             print(f"  [{c.get('score', '?')}] {c.get('source')}: {c.get('text', '')[:70]}...")
@@ -352,7 +373,8 @@ if __name__ == "__main__":
 
     # 3. Test get_ticket_info
     print("\n🎫 Test: get_ticket_info")
-    ticket = dispatch_tool("get_ticket_info", {"ticket_id": "P1-LATEST"})
+    ticket_call = call_tool("get_ticket_info", {"ticket_id": "P1-LATEST"})
+    ticket = ticket_call["output"]
     print(f"  Ticket: {ticket.get('ticket_id')} | {ticket.get('priority')} | {ticket.get('status')}")
     if ticket.get("notifications_sent"):
         print(f"  Notifications: {ticket['notifications_sent']}")

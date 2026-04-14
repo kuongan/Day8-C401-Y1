@@ -25,9 +25,10 @@ SYSTEM_PROMPT = """Bạn là trợ lý IT Helpdesk nội bộ.
 Quy tắc nghiêm ngặt:
 1. CHỈ trả lời dựa vào context được cung cấp. KHÔNG dùng kiến thức ngoài.
 2. Nếu context không đủ để trả lời → nói rõ "Không đủ thông tin trong tài liệu nội bộ".
-3. Trích dẫn nguồn cuối mỗi câu quan trọng: [tên_file].
+3. Trích dẫn nguồn cuối mỗi câu quan trọng: [1], [2], hoặc [tên_file].
 4. Trả lời súc tích, có cấu trúc. Không dài dòng.
 5. Nếu có exceptions/ngoại lệ → nêu rõ ràng trước khi kết luận.
+6. Nếu thiếu evidence thì bắt buộc từ chối trả lời suy đoán.
 """
 
 
@@ -50,19 +51,30 @@ def _call_llm(messages: list) -> str:
     except Exception:
         pass
 
-    # Option B: Gemini
-    try:
-        import google.generativeai as genai
-        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        combined = "\n".join([m["content"] for m in messages])
-        response = model.generate_content(combined)
-        return response.text
-    except Exception:
-        pass
-
     # Fallback: trả về message báo lỗi (không hallucinate)
-    return "[SYNTHESIS ERROR] Không thể gọi LLM. Kiểm tra API key trong .env."
+    return "[SYNTHESIS ERROR] Không thể gọi OpenAI. Kiểm tra OPENAI_API_KEY trong .env."
+
+
+def _fallback_grounded_answer(task: str, chunks: list, policy_result: dict) -> str:
+    """Fallback synthesis khi không gọi được LLM, chỉ dùng evidence đã có."""
+    if not chunks:
+        return "Không đủ thông tin trong tài liệu nội bộ để trả lời câu hỏi này."
+
+    lines = []
+    if policy_result:
+        if policy_result.get("policy_applies") is False:
+            lines.append("Kết luận policy: yêu cầu không được áp dụng do ngoại lệ. [1]")
+        elif policy_result.get("policy_applies") is True:
+            lines.append("Kết luận policy: yêu cầu có thể được áp dụng theo context hiện có. [1]")
+
+    top_chunk = chunks[0]
+    top_text = (top_chunk.get("text", "") or "").strip()
+    if top_text:
+        short_text = top_text[:240] + ("..." if len(top_text) > 240 else "")
+        lines.append(f"Bằng chứng chính: {short_text} [1]")
+
+    lines.append("Nếu cần quyết định vận hành, vui lòng xác thực lại với owner chính sách/tài liệu gốc. [1]")
+    return "\n".join(lines)
 
 
 def _build_context(chunks: list, policy_result: dict) -> str:
@@ -123,6 +135,14 @@ def synthesize(task: str, chunks: list, policy_result: dict) -> dict:
     Returns:
         {"answer": str, "sources": list, "confidence": float}
     """
+    # Contract: không có chunks thì phải abstain, không hallucinate
+    if not chunks:
+        return {
+            "answer": "Không đủ thông tin trong tài liệu nội bộ để trả lời câu hỏi này.",
+            "sources": [],
+            "confidence": 0.2,
+        }
+
     context = _build_context(chunks, policy_result)
 
     # Build messages
@@ -139,7 +159,15 @@ Hãy trả lời câu hỏi dựa vào tài liệu trên."""
     ]
 
     answer = _call_llm(messages)
+    if answer.startswith("[SYNTHESIS ERROR]"):
+        answer = _fallback_grounded_answer(task, chunks, policy_result)
+
     sources = list({c.get("source", "unknown") for c in chunks})
+
+    # Enforce citation presence when evidence exists
+    if sources and "[" not in answer:
+        answer = f"{answer}\n\nNguồn: [1] {sources[0]}"
+
     confidence = _estimate_confidence(chunks, answer, policy_result)
 
     return {

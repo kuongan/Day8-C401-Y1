@@ -38,7 +38,9 @@ class AgentState(TypedDict):
     retrieved_chunks: list[dict[str, Any]]  # Output từ retrieval_worker
     retrieved_sources: list[str]            # Danh sách nguồn tài liệu
     policy_result: dict[str, Any]           # Output từ policy_tool_worker
-    mcp_tools_used: list[str]               # Danh sách MCP tools đã gọi
+    mcp_tools_used: list[dict[str, Any]]    # Danh sách MCP call envelopes
+    mcp_tool_called: list[str]              # Danh sách tên MCP tools đã gọi
+    mcp_result: list[dict[str, Any]]        # Danh sách output từ MCP tools
 
     # Final output
     final_answer: str                   # Câu trả lời tổng hợp
@@ -66,6 +68,8 @@ def make_initial_state(task: str) -> AgentState:
         "retrieved_sources": [],
         "policy_result": {},
         "mcp_tools_used": [],
+        "mcp_tool_called": [],
+        "mcp_result": [],
         "final_answer": "",
         "sources": [],
         "confidence": 0.0,
@@ -95,7 +99,7 @@ def supervisor_node(state: AgentState) -> AgentState:
     state["history"].append(f"[supervisor] received task: {state['task'][:80]}")
 
     route = "retrieval_worker"
-    route_reason = "default fallback: general retrieval"
+    route_reason = "default fallback: general retrieval | no MCP"
     needs_tool = False
     risk_high = False
 
@@ -114,11 +118,11 @@ def supervisor_node(state: AgentState) -> AgentState:
         risk_high = True
     elif any(kw in task for kw in policy_keywords):
         route = "policy_tool_worker"
-        route_reason = "task contains policy/access keyword"
+        route_reason = "task contains policy/access keyword | choose MCP tools"
         needs_tool = True
     elif any(kw in task for kw in retrieval_priority_keywords):
         route = "retrieval_worker"
-        route_reason = "task contains P1/SLA/ticket/escalation keyword"
+        route_reason = "task contains P1/SLA/ticket/escalation keyword | no MCP"
 
     if any(kw in task for kw in risk_keywords) and route != "human_review":
         risk_high = True

@@ -17,13 +17,44 @@ Gọi độc lập để test:
 """
 
 import os
-import sys
 import json
-from typing import Optional
 from dotenv import load_dotenv
 load_dotenv(override=True)
 
 WORKER_NAME = "policy_tool_worker"
+
+
+def _normalize_policy_result(raw: dict, sources: list[str]) -> dict:
+    """Chuẩn hóa output policy_result theo contract, kể cả khi LLM trả thiếu field."""
+    raw = raw or {}
+
+    exceptions = raw.get("exceptions_found", [])
+    if not isinstance(exceptions, list):
+        exceptions = []
+
+    applies = raw.get("policy_applies")
+    if not isinstance(applies, bool):
+        applies = len(exceptions) == 0
+
+    normalized_sources = raw.get("source", sources)
+    if isinstance(normalized_sources, str):
+        normalized_sources = [normalized_sources]
+    if not isinstance(normalized_sources, list):
+        normalized_sources = sources
+
+    return {
+        "policy_applies": applies,
+        "policy_name": raw.get("policy_name", "refund_policy_v4"),
+        "exceptions_found": exceptions,
+        "source": normalized_sources,
+        "policy_version_note": raw.get("policy_version_note", ""),
+        "explanation": raw.get(
+            "explanation",
+            "Không phát hiện ngoại lệ chính sách trong context hiện có."
+            if applies else
+            "Phát hiện ngoại lệ chính sách, yêu cầu hoàn tiền không được áp dụng.",
+        ),
+    }
 
 
 # ─────────────────────────────────────────────
@@ -38,20 +69,12 @@ def _call_mcp_tool(tool_name: str, tool_input: dict) -> dict:
 
     Hiện tại: Import trực tiếp từ mcp_server.py (trong-process mock).
     """
-    from datetime import datetime
-
     try:
-        # TODO Sprint 3: Thay bằng real MCP client nếu dùng HTTP server
-        from mcp_server import dispatch_tool
-        result = dispatch_tool(tool_name, tool_input)
-        return {
-            "tool": tool_name,
-            "input": tool_input,
-            "output": result,
-            "error": None,
-            "timestamp": datetime.now().isoformat(),
-        }
+        # Standard mock MCP call envelope from mcp_server.py
+        from mcp_server import call_tool
+        return call_tool(tool_name, tool_input)
     except Exception as e:
+        from datetime import datetime
         return {
             "tool": tool_name,
             "input": tool_input,
@@ -69,10 +92,7 @@ def analyze_policy(task: str, chunks: list) -> dict:
     """
     Phân tích policy dựa trên context chunks bằng OpenAI LLM.
     """
-    from openai import OpenAI
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    if not client:
-        return {"error": "OpenAI client is not initialized"}
+    openai_key = os.getenv("OPENAI_API_KEY")
 
     # Chuẩn bị dữ liệu context từ các chunks
     context_text = "\n".join([
@@ -109,36 +129,70 @@ def analyze_policy(task: str, chunks: list) -> dict:
     {context_text}
     """
 
-    try:
-        # Gọi OpenAI với JSON Mode
-        response = client.chat.completions.create(
-            model="gpt-4o-mini", # Hoặc gpt-4o
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
-            ],
-            response_format={"type": "json_object"},
-            temperature=0  # Để kết quả ổn định, khách quan
-        )
+    if openai_key:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=openai_key)
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0,
+            )
+            analysis = json.loads(response.choices[0].message.content)
+            analysis["source"] = sources
+            return _normalize_policy_result(analysis, sources)
+        except Exception as e:
+            print(f"Error in analyze_policy (LLM): {e}")
 
-        # Parse kết quả từ LLM
-        analysis = json.loads(response.choices[0].message.content)
-        
-        # Bổ sung thông tin source vào kết quả cuối cùng
-        analysis["source"] = sources
-        
-        return analysis
+    # Rule-based fallback để worker chạy độc lập ngay cả khi thiếu API key
+    lower_task = task.lower()
+    combined_text = "\n".join((c.get("text", "") or "") for c in chunks).lower()
+    haystack = f"{lower_task}\n{combined_text}"
 
-    except Exception as e:
-        print(f"Error in analyze_policy: {e}")
-        # Fallback khi LLM gặp lỗi
-        return {
-            "policy_applies": False,
-            "policy_name": "unknown",
-            "exceptions_found": [],
-            "source": sources,
-            "explanation": f"Lỗi khi gọi LLM: {str(e)}"
-        }
+    exceptions = []
+    if "flash sale" in haystack:
+        exceptions.append({
+            "type": "flash_sale_exception",
+            "rule": "Đơn hàng Flash Sale không được hoàn tiền.",
+            "source": "policy_refund_v4.txt",
+        })
+    if any(k in haystack for k in ["digital", "license key", "subscription"]):
+        exceptions.append({
+            "type": "digital_product_exception",
+            "rule": "Sản phẩm kỹ thuật số (license key/subscription) không được hoàn tiền.",
+            "source": "policy_refund_v4.txt",
+        })
+    if any(k in haystack for k in ["đã kích hoạt", "activated", "used"]):
+        exceptions.append({
+            "type": "activated_product_exception",
+            "rule": "Sản phẩm đã kích hoạt/đã sử dụng không được hoàn tiền.",
+            "source": "policy_refund_v4.txt",
+        })
+
+    policy_name = "refund_policy_v4"
+    policy_version_note = "Áp dụng mặc định chính sách v4 theo tài liệu hiện có."
+    if "31/01/2026" in haystack or "trước 01/02/2026" in haystack:
+        policy_name = "refund_policy_v3"
+        policy_version_note = "Có tín hiệu giao dịch trước 01/02/2026, cần tra cứu thêm policy v3."
+
+    applies = len(exceptions) == 0
+    explanation = (
+        "Không phát hiện ngoại lệ chính sách trong context hiện có."
+        if applies else
+        "Phát hiện ngoại lệ chính sách, yêu cầu hoàn tiền không được áp dụng."
+    )
+    return _normalize_policy_result({
+        "policy_applies": applies,
+        "policy_name": policy_name,
+        "exceptions_found": exceptions,
+        "source": sources,
+        "policy_version_note": policy_version_note,
+        "explanation": explanation,
+    }, sources)
 # ─────────────────────────────────────────────
 # Worker Entry Point
 # ─────────────────────────────────────────────
@@ -160,6 +214,8 @@ def run(state: dict) -> dict:
     state.setdefault("workers_called", [])
     state.setdefault("history", [])
     state.setdefault("mcp_tools_used", [])
+    state.setdefault("mcp_tool_called", [])
+    state.setdefault("mcp_result", [])
 
     state["workers_called"].append(WORKER_NAME)
 
@@ -179,6 +235,8 @@ def run(state: dict) -> dict:
         if not chunks and needs_tool:
             mcp_result = _call_mcp_tool("search_kb", {"query": task, "top_k": 3})
             state["mcp_tools_used"].append(mcp_result)
+            state["mcp_tool_called"].append(mcp_result.get("tool"))
+            state["mcp_result"].append(mcp_result.get("output"))
             state["history"].append(f"[{WORKER_NAME}] called MCP search_kb")
 
             if mcp_result.get("output") and mcp_result["output"].get("chunks"):
@@ -193,6 +251,8 @@ def run(state: dict) -> dict:
         if needs_tool and any(kw in task.lower() for kw in ["ticket", "p1", "jira"]):
             mcp_result = _call_mcp_tool("get_ticket_info", {"ticket_id": "P1-LATEST"})
             state["mcp_tools_used"].append(mcp_result)
+            state["mcp_tool_called"].append(mcp_result.get("tool"))
+            state["mcp_result"].append(mcp_result.get("output"))
             state["history"].append(f"[{WORKER_NAME}] called MCP get_ticket_info")
 
         worker_io["output"] = {
