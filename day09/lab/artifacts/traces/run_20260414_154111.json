@@ -1,0 +1,73 @@
+{
+  "task": "Nhân viên được làm remote tối đa mấy ngày mỗi tuần?",
+  "route_reason": "default fallback: general retrieval | no MCP",
+  "risk_high": false,
+  "needs_tool": false,
+  "hitl_triggered": false,
+  "retrieved_chunks": [],
+  "retrieved_sources": [],
+  "policy_result": {},
+  "mcp_tools_used": [],
+  "mcp_tool_called": [],
+  "mcp_result": [],
+  "final_answer": "Không đủ thông tin trong tài liệu nội bộ để trả lời câu hỏi này.",
+  "sources": [],
+  "confidence": 0.2,
+  "history": [
+    "[supervisor] received task: Nhân viên được làm remote tối đa mấy ngày mỗi tuần?",
+    "[supervisor] route=retrieval_worker reason=default fallback: general retrieval | no MCP",
+    "[retrieval_worker] ERROR: Collection 'day09_docs' rỗng. Chạy index script trong README trước khi query.",
+    "[synthesis_worker] answer generated, confidence=0.2, sources=[]",
+    "[graph] completed in 12458ms"
+  ],
+  "workers_called": [
+    "retrieval_worker",
+    "synthesis_worker"
+  ],
+  "worker_io_logs": [
+    {
+      "worker": "retrieval_worker",
+      "input": {
+        "task": "Nhân viên được làm remote tối đa mấy ngày mỗi tuần?",
+        "top_k": 3,
+        "score_threshold": 0.0
+      },
+      "output": null,
+      "error": {
+        "code": "RETRIEVAL_FAILED",
+        "reason": "Collection 'day09_docs' rỗng. Chạy index script trong README trước khi query."
+      }
+    },
+    {
+      "worker": "synthesis_worker",
+      "input": {
+        "task": "Nhân viên được làm remote tối đa mấy ngày mỗi tuần?",
+        "chunks_count": 0,
+        "has_policy": false
+      },
+      "output": {
+        "answer_length": 64,
+        "sources": [],
+        "confidence": 0.2
+      },
+      "error": null
+    }
+  ],
+  "supervisor_route": "retrieval_worker",
+  "latency_ms": 12458,
+  "run_id": "run_20260414_154111",
+  "worker_io_log": {
+    "worker": "retrieval_worker",
+    "input": {
+      "task": "Nhân viên được làm remote tối đa mấy ngày mỗi tuần?",
+      "top_k": 3,
+      "score_threshold": 0.0
+    },
+    "output": null,
+    "error": {
+      "code": "RETRIEVAL_FAILED",
+      "reason": "Collection 'day09_docs' rỗng. Chạy index script trong README trước khi query."
+    }
+  },
+  "question_id": "q05"
+}

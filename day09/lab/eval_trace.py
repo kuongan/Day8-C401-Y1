@@ -25,6 +25,29 @@ from typing import Optional
 sys.path.insert(0, os.path.dirname(__file__))
 from graph import run_graph, save_trace
 
+# Import eval functions từ day08
+day08_path = os.path.join(os.path.dirname(__file__), "..", "..", "day08", "lab")
+sys.path.insert(0, day08_path)
+try:
+    from eval import (
+        get_metrics_summary,
+        calculate_total_questions,
+        calculate_avg_confidence,
+        calculate_avg_latency_ms,
+        calculate_abstain_rate,
+        calculate_multi_hop_accuracy,
+    )
+except ImportError:
+    # Nếu không import được, define fallback functions
+    def get_metrics_summary(results, test_questions=None):
+        return {
+            "total_questions": len(results),
+            "avg_confidence": 0,
+            "avg_latency_ms": 0,
+            "abstain_rate": "?",
+            "multi_hop_accuracy": "?",
+        }
+
 
 # ─────────────────────────────────────────────
 # 1. Run Pipeline on Test Questions
@@ -185,7 +208,7 @@ def analyze_traces(traces_dir: str = "artifacts/traces") -> dict:
 
     traces = []
     for fname in trace_files:
-        with open(os.path.join(traces_dir, fname)) as f:
+        with open(os.path.join(traces_dir, fname), encoding="utf-8") as f:
             traces.append(json.load(f))
 
     # Compute metrics
@@ -242,26 +265,76 @@ def compare_single_vs_multi(
     """
     So sánh Day 08 (single agent RAG) vs Day 09 (multi-agent).
 
-    TODO Sprint 4: Điền kết quả thực tế từ Day 08 vào day08_baseline.
+    Nếu không có day08_results_file, hàm sẽ cố gắng chạy eval.py từ day08.
+
+    Args:
+        multi_traces_dir: Đường dẫn tới folder traces của Day 09
+        day08_results_file: Đường dẫn tới JSON file chứa Day 08 results (optional)
 
     Returns:
         dict của comparison metrics
     """
     multi_metrics = analyze_traces(multi_traces_dir)
 
-    # TODO: Load Day 08 results nếu có
-    # Nếu không có, dùng baseline giả lập để format
+    # Khởi tạo day08_baseline
     day08_baseline = {
-        "total_questions": 15,
-        "avg_confidence": 0.0,          # TODO: Điền từ Day 08 eval.py
-        "avg_latency_ms": 0,            # TODO: Điền từ Day 08
-        "abstain_rate": "?",            # TODO: Điền từ Day 08
-        "multi_hop_accuracy": "?",      # TODO: Điền từ Day 08
+        "total_questions": 10,
+        "avg_confidence": 4.6,          
+        "avg_latency_ms": 0,            
+        "abstain_rate": "?",            
+        "multi_hop_accuracy": "?",      
     }
 
+    # Cách 1: Load từ file nếu có
     if day08_results_file and os.path.exists(day08_results_file):
-        with open(day08_results_file) as f:
-            day08_baseline = json.load(f)
+        try:
+            with open(day08_results_file, encoding="utf-8") as f:
+                day08_data = json.load(f)
+                day08_baseline.update(day08_data)
+                return {
+                    "generated_at": datetime.now().isoformat(),
+                    "day08_single_agent": day08_baseline,
+                    "day09_multi_agent": multi_metrics,
+                    "source": "Loaded from file",
+                }
+        except Exception as e:
+            print(f"⚠️  Không load được Day 08 results từ {day08_results_file}: {e}")
+    
+    # Cách 2: Cố gắng chạy eval.py từ day08 để tính metrics
+    try:
+        day08_lab_path = os.path.join(
+            os.path.dirname(__file__), "..", "..", "day08", "lab"
+        )
+        
+        # Kiểm tra test_questions.json của day08
+        day08_questions_path = os.path.join(day08_lab_path, "data", "test_questions.json")
+        if os.path.exists(day08_questions_path):
+            with open(day08_questions_path, encoding="utf-8") as f:
+                test_questions = json.load(f)
+            
+            # Cố gắng chạy eval từ day08
+            sys.path.insert(0, day08_lab_path)
+            
+            # Import và chạy run_scorecard từ day08 eval
+            from day08.lab.eval import run_scorecard, BASELINE_CONFIG
+            
+            # Chạy baseline
+            print("\n[compare_single_vs_multi] Chạy Day 08 eval để tính metrics...")
+            baseline_results = run_scorecard(
+                config=BASELINE_CONFIG,
+                test_questions=test_questions,
+                verbose=False,
+            )
+            
+            # Tính metrics
+            try:
+                day08_metrics = get_metrics_summary(baseline_results, test_questions)
+                day08_baseline.update(day08_metrics)
+            except Exception as e:
+                print(f"⚠️  Lỗi tính metrics từ Day 08: {e}")
+    
+    except Exception as e:
+        print(f"⚠️  Không chạy eval Day 08: {e}")
 
     comparison = {
         "generated_at": datetime.now().isoformat(),
@@ -269,8 +342,13 @@ def compare_single_vs_multi(
         "day09_multi_agent": multi_metrics,
         "analysis": {
             "routing_visibility": "Day 09 có route_reason cho từng câu → dễ debug hơn Day 08",
-            "latency_delta": "TODO: Điền delta latency thực tế",
-            "accuracy_delta": "TODO: Điền delta accuracy thực tế từ grading",
+            "latency_delta": f"Day 08: {day08_baseline.get('avg_latency_ms', 0)}ms vs "
+                           f"Day 09: {multi_metrics.get('avg_latency_ms', 0)}ms",
+            "confidence_delta": f"Day 08: {day08_baseline.get('avg_confidence', 0)} vs "
+                              f"Day 09: {multi_metrics.get('avg_confidence', 0)}",
+            "abstain_rate": f"Day 08: {day08_baseline.get('abstain_rate', '?')} vs "
+                          f"Day 09: {multi_metrics.get('mcp_usage_rate', '?')} MCP adoption",
+            "multi_hop_accuracy": f"Day 08: {day08_baseline.get('multi_hop_accuracy', '?')}",
             "debuggability": "Multi-agent: có thể test từng worker độc lập. Single-agent: không thể.",
             "mcp_benefit": "Day 09 có thể extend capability qua MCP không cần sửa core. Day 08 phải hard-code.",
         },
