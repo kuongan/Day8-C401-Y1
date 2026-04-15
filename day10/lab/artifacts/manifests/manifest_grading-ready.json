@@ -1,6 +1,6 @@
 {
-  "run_id": "sprint3-after-fix",
-  "run_timestamp": "2026-04-15T10:32:57.508511+00:00",
+  "run_id": "grading-ready",
+  "run_timestamp": "2026-04-15T10:28:12.314306+00:00",
   "pipeline_status": "OK",
   "embed_status": "ok",
   "raw_path": "data\\raw\\policy_export_dirty.csv",
@@ -10,7 +10,7 @@
   "latest_exported_at": "2026-04-10T08:00:00",
   "no_refund_fix": false,
   "skipped_validate": false,
-  "cleaned_csv": "artifacts\\cleaned\\cleaned_sprint3-after-fix.csv",
+  "cleaned_csv": "artifacts\\cleaned\\cleaned_grading-ready.csv",
   "chroma_path": "./chroma_db",
   "chroma_collection": "day10_kb"
 }
