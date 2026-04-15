@@ -86,26 +86,32 @@ def cmd_run(args: argparse.Namespace) -> int:
         log(f"expectation[{r.name}] {sym} ({r.severity}) :: {r.detail}")
     if halt and not args.skip_validate:
         log("PIPELINE_HALT: expectation suite failed (halt).")
-        return 2
     if halt and args.skip_validate:
         log("WARN: expectation failed but --skip-validate → tiếp tục embed (chỉ dùng cho demo Sprint 3).")
 
-    # Embed
-    embed_ok = cmd_embed_internal(
-        cleaned_path,
-        run_id=run_id,
-        log=log,
-    )
-    if not embed_ok:
-        return 3
+    # Embed (only when not halted or when explicitly skipping validation)
+    embed_status = "skipped"
+    if not halt or args.skip_validate:
+        embed_ok = cmd_embed_internal(
+            cleaned_path,
+            run_id=run_id,
+            log=log,
+        )
+        embed_status = "ok" if embed_ok else "failed"
+        if not embed_ok:
+            # Write manifest for observability even on embed failure.
+            embed_status = "failed"
 
     latest_exported = ""
     if cleaned:
         latest_exported = max((r.get("exported_at") or "" for r in cleaned), default="")
 
+    pipeline_status = "HALT" if (halt and not args.skip_validate) else "OK"
     manifest = {
         "run_id": run_id,
         "run_timestamp": datetime.now(timezone.utc).isoformat(),
+        "pipeline_status": pipeline_status,
+        "embed_status": embed_status,
         "raw_path": str(raw_path.relative_to(ROOT)),
         "raw_records": raw_count,
         "cleaned_records": len(cleaned),
@@ -124,6 +130,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     status, fdetail = check_manifest_freshness(man_path, sla_hours=float(os.environ.get("FRESHNESS_SLA_HOURS", "24")))
     log(f"freshness_check={status} {json.dumps(fdetail, ensure_ascii=False)}")
 
+    if pipeline_status == "HALT":
+        return 2
+    if embed_status == "failed":
+        return 3
     log("PIPELINE_OK")
     return 0
 
