@@ -1,0 +1,9 @@
+chunk_id,doc_id,chunk_text,effective_date,exported_at,reason
+2,policy_refund_v4,Yêu cầu được gửi trong vòng 7 ngày làm việc kể từ thời điểm xác nhận đơn hàng.,2026-02-01,2026-04-10T08:00:00,duplicate_chunk_text
+5,policy_refund_v4,,,2026-04-10T08:00:00,missing_effective_date
+7,hr_leave_policy,Nhân viên dưới 3 năm kinh nghiệm được 10 ngày phép năm (bản HR 2025).,2025-01-01,2026-04-10T08:00:00,stale_hr_policy_effective_date
+9,legacy_catalog_xyz_zzz,Chunk nội dung đủ dài để vượt ngưỡng expectation độ dài tối thiểu trong cleaned export.,2026-02-01,2026-04-10T08:00:00,unknown_doc_id
+10,it_helpdesk_faq,FAQ bổ sung: đổi mật khẩu qua portal self-service có thể mất tối đa 24 giờ để đồng bộ toàn hệ thống.,01/02/2026,2026-04-10T08:00:00,sensitive_info_detected
+11,it_helpdesk_faq,CẢNH BÁO: Mật khẩu mặc định của hệ thống là Admin@123. Vui lòng không chia sẻ.,2026-02-01,2026-04-10T08:00:00,sensitive_info_detected
+12,sla_p1_2026,Chính sách SLA này sẽ có hiệu lực vào năm tới.,2029-12-31,2026-04-10T08:00:00,unrealistic_future_date
+13,policy_refund_v4,Nội dung test.,2026-02-01,2026-04-10T08:00:00,text_too_short_min_30
