@@ -111,6 +111,37 @@ def run_expectations(cleaned_rows: List[Dict[str, Any]]) -> Tuple[List[Expectati
             f"violations={len(bad_hr_annual)}",
         )
     )
+   
+    # E7: Chặn dữ liệu chứa thông tin nhạy cảm (Security Breach)
+    # Mục tiêu: Bắt dòng số 11
+    sensitive_patterns = ["mật khẩu", "password", "admin@", "pin:"]
+    bad_security = [
+        r for r in cleaned_rows 
+        if any(pat in (r.get("chunk_text") or "").lower() for pat in sensitive_patterns)
+    ]
+    results.append(
+        ExpectationResult(
+            "no_sensitive_info",
+            len(bad_security) == 0,
+            "halt",
+            f"security_violations={len(bad_security)}",
+        )
+    )
 
+    # E8: Chặn dữ liệu có ngày hiệu lực phi thực tế (Future Date)
+    # Mục tiêu: Bắt dòng số 12 (Năm 2029 là quá xa so với hiện tại 2026)
+    # Logic: Bất kỳ ngày nào sau năm 2027 đều bị coi là lỗi nhập liệu
+    unrealistic_future = [
+        r for r in cleaned_rows 
+        if (r.get("effective_date") or "") > "2027-12-31"
+    ]
+    results.append(
+        ExpectationResult(
+            "no_unrealistic_future_dates",
+            len(unrealistic_future) == 0,
+            "halt",
+            f"future_date_violations={len(unrealistic_future)}",
+        )
+    )
     halt = any(not r.passed and r.severity == "halt" for r in results)
     return results, halt
