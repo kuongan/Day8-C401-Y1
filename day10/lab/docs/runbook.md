@@ -11,7 +11,11 @@ Người dùng / agent bắt đầu thấy câu trả lời cũ, ví dụ refund
 Freshness được check từ manifest bằng lệnh:
 
 ```bash
-python etl_pipeline.py freshness --manifest artifacts/manifests/manifest_<run-id>.json
+python etl_pipeline.py freshness --manifest artifacts/manifests/manifest_sprint3-inject-bad.json
+PASS {"latest_exported_at": "2026-04-20T08:00:00", "age_hours": -118.093, "sla_hours": 24.0}
+
+python etl_pipeline.py freshness --manifest artifacts/manifests/manifest_sprint3-inject-bad-rerun.json 
+PASS {"latest_exported_at": "2026-04-15T09:48:04.375372+00:00", "age_hours": 0.108, "sla_hours": 24.0}
 ```
 
 Ý nghĩa trạng thái:
@@ -26,6 +30,19 @@ Lưu ý vận hành:
 - Với ca này, không dùng kết quả `PASS` để kết luận dữ liệu fresh; phải kiểm tra lại nguồn export và chạy lại pipeline để tạo manifest hợp lệ.
 
 SLA mặc định là 24 giờ, nhưng có thể đổi bằng biến môi trường `FRESHNESS_SLA_HOURS` nếu nhóm muốn thống nhất một ngưỡng khác.
+
+### Vì sao cả 2 ví dụ đều `PASS`
+
+Với logic hiện tại, freshness pass khi điều kiện sau đúng:
+
+`age_hours <= sla_hours`
+
+Trong đó `age_hours = now - latest_exported_at` (đơn vị giờ).
+
+- Ví dụ 1: `age_hours = -118.093` vẫn nhỏ hơn `24.0`, nên hệ thống trả `PASS` dù thực tế đây là timestamp tương lai (cần xử lý như cảnh báo vận hành).
+- Ví dụ 2: `age_hours = 0.108` nhỏ hơn `24.0`, nên `PASS` là đúng theo SLA (dữ liệu còn fresh).
+
+Kết luận: `PASS` chỉ cho biết điều kiện số học đang đạt ngưỡng; cần đọc thêm dấu của `age_hours` để phân biệt pass hợp lệ hay pass do timestamp tương lai.
 
 ## Diagnosis
 
