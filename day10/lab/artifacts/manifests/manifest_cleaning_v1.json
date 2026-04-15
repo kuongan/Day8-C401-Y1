@@ -1,0 +1,16 @@
+{
+  "run_id": "cleaning_v1",
+  "run_timestamp": "2026-04-15T06:48:44.602896+00:00",
+  "pipeline_status": "OK",
+  "embed_status": "ok",
+  "raw_path": "data\\raw\\policy_export_dirty.csv",
+  "raw_records": 10,
+  "cleaned_records": 5,
+  "quarantine_records": 5,
+  "latest_exported_at": "2026-04-10T08:00:00",
+  "no_refund_fix": false,
+  "skipped_validate": false,
+  "cleaned_csv": "artifacts\\cleaned\\cleaned_cleaning_v1.csv",
+  "chroma_path": "./chroma_db",
+  "chroma_collection": "day10_kb"
+}
